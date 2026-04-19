@@ -35,9 +35,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Хранилище данных
-const users = new Map();
-const messages = [];
-const typingUsers = new Map();
+const users = new Map(); // username -> { socketId, avatar }
+const messages = []; // все сообщения
+const typingUsers = new Set(); // кто печатает
 
 function generateId() {
     return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
@@ -56,11 +56,9 @@ app.post('/upload', upload.single('file'), (req, res) => {
     if (!file) return res.status(400).json({ error: 'Нет файла' });
     
     let fileType = 'document';
-    let preview = null;
     
     if (file.mimetype.startsWith('image/')) {
         fileType = 'image';
-        preview = `/uploads/${file.filename}`;
     } else if (file.mimetype.startsWith('audio/')) {
         fileType = 'audio';
     } else if (file.mimetype === 'application/pdf') {
@@ -83,9 +81,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
     };
     
     if (fileType === 'image') {
-        msgData.message = preview;
-    } else if (fileType === 'audio') {
-        msgData.message = `🎵 Аудиофайл`;
+        msgData.message = `/uploads/${file.filename}`;
     } else {
         msgData.message = `📄 ${file.originalname}`;
     }
@@ -96,7 +92,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
     res.json({ success: true, message: msgData });
 });
 
-// Обработка голосовых сообщений (сохранение как файл)
+// Обработка голосовых сообщений
 const voiceStorage = multer.diskStorage({
     destination: (req, file, cb) => {
         const voiceDir = path.join(__dirname, 'uploads', 'voice');
@@ -189,11 +185,14 @@ io.on('connection', (socket) => {
     
     socket.on('typing_start', (data) => {
         const { username } = data;
-        socket.broadcast.emit('typing_update', { user: username });
+        typingUsers.add(username);
+        io.emit('typing_update', { users: Array.from(typingUsers) });
     });
     
     socket.on('typing_stop', (data) => {
-        socket.broadcast.emit('typing_update', { user: null });
+        const { username } = data;
+        typingUsers.delete(username);
+        io.emit('typing_update', { users: Array.from(typingUsers) });
     });
     
     socket.on('disconnect', () => {
@@ -202,6 +201,7 @@ io.on('connection', (socket) => {
             if (data.socketId === socket.id) {
                 disconnectedUser = username;
                 users.delete(username);
+                typingUsers.delete(username);
                 break;
             }
         }
@@ -209,6 +209,7 @@ io.on('connection', (socket) => {
         if (disconnectedUser) {
             const userList = Array.from(users.keys());
             io.emit('user_left', { username: disconnectedUser, users: userList });
+            io.emit('typing_update', { users: Array.from(typingUsers) });
         }
         
         console.log('Пользователь отключился:', socket.id);

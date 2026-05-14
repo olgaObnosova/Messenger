@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Мессенджер - Файлы, Голос, Фон</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            transition: background 0.3s;
+        }
+
+        body.theme-dark {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+
+        body.theme-nature {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        body.theme-sunset {
+            background: linear-gradient(135deg, #f12711 0%, #f5af19 100%);
+        }
+
+        body.theme-ocean {
+            background: linear-gradient(135deg, #00b4db 0%, #0083b0 100%);
+        }
+
+        .messenger {
+            width: 100%;
+            max-width: 600px;
+            height: 750px;
+            background: white;
+            border-radius: 30px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+
+        .messenger.theme-dark {
+            background: #1e1e2e;
+            color: #fff;
+        }
+
+        .messenger.theme-nature {
+            background: #e8f5e9;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .theme-dark .header {
+            background: linear-gradient(135deg, #0f3460, #16213e);
+        }
+
+        .theme-nature .header {
+            background: linear-gradient(135deg, #11998e, #38ef7d);
+        }
+
+        .current-avatar {
+            width: 45px;
+            height: 45px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .current-avatar:hover {
+            transform: scale(1.05);
+        }
+
+        .header h2 {
+            flex: 1;
+            font-size: 18px;
+        }
+
+        .online-count {
+            font-size: 12px;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        .tools-header {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tool-icon {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            padding: 6px 10px;
+            border-radius: 20px;
+            cursor: pointer;
+            color: white;
+            font-size: 16px;
+        }
+
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: #f0f2f5;
+        }
+
+        .messenger.theme-dark .messages-area {
+            background: #2a2a3e;
+        }
+
+        .messenger.theme-nature .messages-area {
+            background: #c8e6c9;
+        }
+
+        .message {
+            display: flex;
+            gap: 10px;
+            max-width: 85%;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.outgoing {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            flex-shrink: 0;
+        }
+
+        .message-bubble {
+            background: white;
+            padding: 10px 14px;
+            border-radius: 18px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            word-wrap: break-word;
+            max-width: 100%;
+        }
+
+        .outgoing .message-bubble {
+            background: #dcf8c5;
+        }
+
+        .theme-dark .outgoing .message-bubble {
+            background: #0f3460;
+            color: white;
+        }
+
+        .theme-dark .message-bubble {
+            background: #3a3a4e;
+            color: #ddd;
+        }
+
+        .message-username {
+            font-size: 12px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .message-text {
+            font-size: 14px;
+        }
+
+        .message-time {
+            font-size: 10px;
+            color: #999;
+            margin-top: 4px;
+            display: block;
+            text-align: right;
+        }
+
+        .file-message {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background: #f5f5f5;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+
+        .file-icon {
+            font-size: 32px;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .file-size {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .message-image {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+
+        .voice-message {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 200px;
+        }
+
+        .voice-play {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .voice-wave {
+            flex: 1;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .wave-bar {
+            width: 3px;
+            background: #667eea;
+            border-radius: 2px;
+            animation: wave 0.5s infinite ease;
+        }
+
+        @keyframes wave {
+            0%, 100% { height: 5px; }
+            50% { height: 20px; }
+        }
+
+        .voice-duration {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .system-message {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            background: #e0e0e0;
+            padding: 6px 12px;
+            border-radius: 20px;
+            align-self: center;
+            max-width: 80%;
+        }
+
+        .input-panel {
+            padding: 12px 16px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .tools {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .tool-btn {
+            background: #f0f0f0;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .tool-btn:hover {
+            background: #e0e0e0;
+            transform: scale(1.02);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-row input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 25px;
+            outline: none;
+            font-size: 14px;
+        }
+
+        .input-row input:focus {
+            border-color: #667eea;
+        }
+
+        .input-row button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .record-btn {
+            background: #f44336 !important;
+        }
+
+        .record-btn.recording {
+            animation: pulse 1s infinite;
+            background: #ff0000 !important;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .theme-panel, .file-preview {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 25px;
+            padding: 20px;
+            z-index: 200;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            width: 350px;
+            max-width: 90%;
+            display: none;
+        }
+
+        .theme-panel.show, .file-preview.show {
+            display: block;
+        }
+
+        .theme-options {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .theme-option {
+            padding: 15px;
+            border-radius: 15px;
+            cursor: pointer;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .theme-option:hover {
+            transform: scale(1.05);
+        }
+
+        .theme-default { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+        .theme-dark-theme { background: linear-gradient(135deg, #1a1a2e, #16213e); color: white; }
+        .theme-nature-theme { background: linear-gradient(135deg, #11998e, #38ef7d); color: white; }
+        .theme-sunset-theme { background: linear-gradient(135deg, #f12711, #f5af19); color: white; }
+        .theme-ocean-theme { background: linear-gradient(135deg, #00b4db, #0083b0); color: white; }
+
+        .avatar-selector {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 25px;
+            padding: 20px;
+            z-index: 200;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            width: 350px;
+            max-width: 90%;
+            display: none;
+        }
+
+        .avatar-selector.show {
+            display: block;
+        }
+
+        .avatar-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .avatar-option {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            transition: transform 0.2s;
+        }
+
+        .close-btn {
+            width: 100%;
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+
+        .login-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .login-box {
+            background: white;
+            padding: 30px;
+            border-radius: 25px;
+            width: 90%;
+            max-width: 350px;
+            text-align: center;
+        }
+
+        .login-box input {
+            width: 100%;
+            padding: 12px;
+            margin: 15px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+        }
+
+        .login-avatars {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+
+        .login-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .login-avatar.selected {
+            box-shadow: 0 0 0 3px #4caf50;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .typing-indicator {
+            font-size: 11px;
+            color: #999;
+            padding: 5px 16px;
+            font-style: italic;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 140;
+            display: none;
+        }
+
+        .overlay.show {
+            display: block;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="loginScreen" class="login-screen">
+        <div class="login-box">
+            <h2>💬 Мессенджер</h2>
+            <input type="text" id="usernameInput" placeholder="Введите имя">
+            <div class="login-avatars" id="loginAvatars"></div>
+            <button class="login-btn" onclick="login()">Войти</button>
+        </div>
+    </div>
+
+    <div id="mainUI" class="messenger" style="display: none;">
+        <div class="header">
+            <div class="current-avatar" id="currentAvatar" onclick="openAvatarSelector()"></div>
+            <h2>💬 Мессенджер</h2>
+            <div class="online-count" id="onlineCount">0 онлайн</div>
+            <div class="tools-header">
+                <button class="tool-icon" onclick="openThemePanel()">🎨</button>
+            </div>
+        </div>
+
+        <div class="messages-area" id="messagesArea"></div>
+        
+        <div class="typing-indicator" id="typingIndicator"></div>
+        
+        <div class="input-panel">
+            <div class="tools">
+                <button class="tool-btn" onclick="document.getElementById('fileInput').click()">📎 Файл</button>
+                <button class="tool-btn" id="recordBtn" onclick="toggleRecording()">🎤 Голос</button>
+                <input type="file" id="fileInput" onchange="uploadFile(this)">
+            </div>
+            <div class="input-row">
+                <input type="text" id="messageInput" placeholder="Введите сообщение..." autocomplete="off">
+                <button onclick="sendMessage()">Отправить</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="overlay" onclick="closeAllPanels()"></div>
+    
+    <div id="themePanel" class="theme-panel">
+        <h3>🎨 Выберите тему</h3>
+        <div class="theme-options">
+            <div class="theme-option theme-default" onclick="setTheme('default')">🌈 По умолчанию</div>
+            <div class="theme-option theme-dark-theme" onclick="setTheme('dark')">🌙 Темная</div>
+            <div class="theme-option theme-nature-theme" onclick="setTheme('nature')">🌿 Природа</div>
+            <div class="theme-option theme-sunset-theme" onclick="setTheme('sunset')">🌅 Закат</div>
+            <div class="theme-option theme-ocean-theme" onclick="setTheme('ocean')">🌊 Океан</div>
+        </div>
+        <button class="close-btn" onclick="closeThemePanel()">Закрыть</button>
+    </div>
+
+    <div id="avatarSelector" class="avatar-selector">
+        <h3>Выберите аватар</h3>
+        <div class="avatar-grid" id="avatarGrid"></div>
+        <button class="close-btn" onclick="closeAvatarSelector()">Закрыть</button>
+    </div>
+
+    <div id="imagePreview" class="file-preview">
+        <img id="previewImage" style="max-width: 100%; border-radius: 12px;">
+        <button class="close-btn" onclick="closeImagePreview()" style="margin-top: 15px;">Закрыть</button>
+    </div>
+
+    <script>
+        const AVATARS = ["😀", "😎", "🥳", "🤓", "😍", "🦊", "🐱", "🐶", "🐼", "🦁", "⭐", "🌟", "🔥", "💪", "🎨", "🎮"];
+        
+        let socket = null;
+        let currentUser = null;
+        let currentAvatar = null;
+        let typingTimeout = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let recordingStartTime = null;
+
+        function initLoginAvatars() {
+            const container = document.getElementById('loginAvatars');
+            container.innerHTML = '';
+            AVATARS.forEach(avatar => {
+                const div = document.createElement('div');
+                div.className = 'login-avatar';
+                div.textContent = avatar;
+                div.onclick = () => {
+                    document.querySelectorAll('.login-avatar').forEach(a => a.classList.remove('selected'));
+                    div.classList.add('selected');
+                    currentAvatar = avatar;
+                };
+                container.appendChild(div);
+            });
+            if (container.firstChild) {
+                container.firstChild.classList.add('selected');
+                currentAvatar = AVATARS[0];
+            }
+        }
+
+        function login() {
+            const username = document.getElementById('usernameInput').value.trim();
+            if (!username) return;
+            
+            currentUser = username;
+            
+            socket = io();
+            
+            socket.on('connect', () => {
+                socket.emit('join', { username: currentUser, avatar: currentAvatar });
+            });
+            
+            socket.on('joined', (data) => {
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('mainUI').style.display = 'flex';
+                document.getElementById('currentAvatar').textContent = currentAvatar;
+                document.getElementById('onlineCount').textContent = data.users.length + ' онлайн';
+                data.messages.forEach(msg => addMessage(msg));
+            });
+            
+            socket.on('new_message', (data) => addMessage(data));
+            socket.on('user_joined', (data) => {
+                document.getElementById('onlineCount').textContent = data.users.length + ' онлайн';
+                addSystemMessage(`${data.username} присоединился`);
+            });
+            socket.on('user_left', (data) => {
+                document.getElementById('onlineCount').textContent = data.users.length + ' онлайн';
+                addSystemMessage(`${data.username} покинул чат`);
+            });
+            socket.on('typing_update', (data) => {
+                const indicator = document.getElementById('typingIndicator');
+                if (data.user && data.user !== currentUser) {
+                    indicator.textContent = `✏️ ${data.user} печатает...`;
+                } else {
+                    indicator.textContent = '';
+                }
+            });
+            
+            document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+            document.getElementById('messageInput').addEventListener('input', () => handleTyping());
+        }
+        
+        function handleTyping() {
+            socket.emit('typing_start', { username: currentUser });
+            if (typingTimeout) clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                socket.emit('typing_stop', { username: currentUser });
+            }, 1000);
+        }
+        
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+            socket.emit('send_message', { message: message });
+            input.value = '';
+        }
+        
+        function uploadFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('username', currentUser);
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json())
+              .then(data => {
+                  if (data.success) {
+                      addMessage(data.message);
+                  }
+              });
+            
+            input.value = '';
+        }
+        
+        async function toggleRecording() {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const reader = new FileReader();
+                        reader.readAsDataURL(audioBlob);
+                        reader.onloadend = () => {
+                            const base64Audio = reader.result;
+                            fetch('/upload-audio', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    username: currentUser,
+                                    audioData: base64Audio,
+                                    duration: Math.round((Date.now() - recordingStartTime) / 1000)
+                                })
+                            });
+                        };
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+                    
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordingStartTime = Date.now();
+                    const recordBtn = document.getElementById('recordBtn');
+                    recordBtn.classList.add('recording');
+                    recordBtn.textContent = '⏹️ Остановить';
+                } catch (err) {
+                    console.error('Ошибка доступа к микрофону:', err);
+                    alert('Нет доступа к микрофону');
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                const recordBtn = document.getElementById('recordBtn');
+                recordBtn.classList.remove('recording');
+                recordBtn.textContent = '🎤 Голос';
+            }
+        }
+        
+        function addMessage(data) {
+            const container = document.getElementById('messagesArea');
+            const div = document.createElement('div');
+            const isOwn = data.username === currentUser;
+            
+            div.className = `message ${isOwn ? 'outgoing' : ''}`;
+            
+            let content = '';
+            
+            if (data.type === 'text') {
+                content = `<div class="message-text">${escapeHtml(data.message)}</div>`;
+            } else if (data.type === 'image') {
+                content = `<img src="${data.message}" class="message-image" onclick="showImage('${data.message}')">`;
+            } else if (data.type === 'voice') {
+                content = `
+                    <div class="voice-message">
+                        <button class="voice-play" onclick="playVoice(this, '${data.voice_info?.data || ''}')">▶️</button>
+                        <div class="voice-wave" id="wave-${data.id}">
+                            ${Array(20).fill().map(() => '<div class="wave-bar"></div>').join('')}
+                        </div>
+                        <span class="voice-duration">${data.voice_info?.duration || 0} сек</span>
+                    </div>
+                `;
+            } else if (data.file_info) {
+                content = `
+                    <div class="file-message" onclick="downloadFile('${data.file_info.url}', '${data.file_info.filename}')">
+                        <div class="file-icon">${data.type === 'pdf' ? '📄' : '📎'}</div>
+                        <div class="file-info">
+                            <div class="file-name">${escapeHtml(data.file_info.filename)}</div>
+                            <div class="file-size">${formatFileSize(data.file_info.size)}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            div.innerHTML = `
+                <div class="message-avatar">${data.avatar || '😀'}</div>
+                <div class="message-bubble">
+                    <span class="message-username">${escapeHtml(data.username)}</span>
+                    ${content}
+                    <span class="message-time">${data.timestamp}</span>
+                </div>
+            `;
+            
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function playVoice(btn, audioData) {
+            if (!audioData) return;
+            const audio = new Audio(audioData);
+            audio.play();
+            
+            const wave = btn.parentElement.querySelector('.voice-wave');
+            wave.style.animation = 'wave 0.5s infinite';
+            audio.onended = () => {
+                wave.style.animation = '';
+            };
+        }
+        
+        function downloadFile(url, filename) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+        }
+        
+        function showImage(src) {
+            const preview = document.getElementById('imagePreview');
+            const img = document.getElementById('previewImage');
+            img.src = src;
+            preview.classList.add('show');
+            document.getElementById('overlay').classList.add('show');
+        }
+        
+        function closeImagePreview() {
+            document.getElementById('imagePreview').classList.remove('show');
+            document.getElementById('overlay').classList.remove('show');
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        
+        function addSystemMessage(message) {
+            const container = document.getElementById('messagesArea');
+            const div = document.createElement('div');
+            div.className = 'system-message';
+            div.textContent = message;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function openThemePanel() {
+            document.getElementById('themePanel').classList.add('show');
+            document.getElementById('overlay').classList.add('show');
+        }
+        
+        function closeThemePanel() {
+            document.getElementById('themePanel').classList.remove('show');
+            document.getElementById('overlay').classList.remove('show');
+        }
+        
+        function setTheme(theme) {
+            const body = document.body;
+            const messenger = document.querySelector('.messenger');
+            
+            body.className = '';
+            messenger.className = 'messenger';
+            
+            if (theme === 'dark') {
+                body.classList.add('theme-dark');
+                messenger.classList.add('theme-dark');
+            } else if (theme === 'nature') {
+                body.classList.add('theme-nature');
+                messenger.classList.add('theme-nature');
+            } else if (theme === 'sunset') {
+                body.classList.add('theme-sunset');
+            } else if (theme === 'ocean') {
+                body.classList.add('theme-ocean');
+            }
+            
+            localStorage.setItem('chatTheme', theme);
+            closeThemePanel();
+        }
+        
+        function loadSavedTheme() {
+            const savedTheme = localStorage.getItem('chatTheme');
+            if (savedTheme) {
+                setTheme(savedTheme);
+            }
+        }
+        
+        function openAvatarSelector() {
+            const selector = document.getElementById('avatarSelector');
+            const grid = document.getElementById('avatarGrid');
+            grid.innerHTML = '';
+            AVATARS.forEach(avatar => {
+                const div = document.createElement('div');
+                div.className = 'avatar-option';
+                div.textContent = avatar;
+                if (currentAvatar === avatar) div.classList.add('selected');
+                div.onclick = () => {
+                    document.querySelectorAll('#avatarGrid .avatar-option').forEach(a => a.classList.remove('selected'));
+                    div.classList.add('selected');
+                    currentAvatar = avatar;
+                    document.getElementById('currentAvatar').textContent = currentAvatar;
+                    socket.emit('update_avatar', { username: currentUser, avatar: currentAvatar });
+                    closeAvatarSelector();
+                };
+                grid.appendChild(div);
+            });
+            selector.classList.add('show');
+            document.getElementById('overlay').classList.add('show');
+        }
+        
+        function closeAvatarSelector() {
+            document.getElementById('avatarSelector').classList.remove('show');
+            document.getElementById('overlay').classList.remove('show');
+        }
+        
+        function closeAllPanels() {
+            closeThemePanel();
+            closeAvatarSelector();
+            closeImagePreview();
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        initLoginAvatars();
+        loadSavedTheme();
+    </script>
+</body>
+</html>
